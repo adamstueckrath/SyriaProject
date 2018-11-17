@@ -1,14 +1,9 @@
 # import core libraries 
-import datetime
-import json
-import re
 import csv
 import ast
 import pprint
 import pathlib
 import itertools
-from collections import Counter
-from itertools import islice
 
 # import third-party libraries
 import numpy as np
@@ -55,17 +50,12 @@ vectorizer = TfidfVectorizer()
 tweetVectorizerArray = vectorizer.fit_transform(tweet_set).toarray()
 eventVectorizerArray = vectorizer.transform(event_set).toarray()
 
-print('starting run')
 event_id_list = events_df.event_id.tolist()
-cosine_x = lambda a, b : round(np.inner(a, b)/(LA.norm(a)*LA.norm(b)), 3)
 tweet_event_ids = []
-counter_steps = [ x for x in range(0,100000, 1000) ]
-counter = 0
+cosine_x = lambda a, b : round(np.inner(a, b)/(LA.norm(a)*LA.norm(b)), 3)
+
 for tweet_vector in tweetVectorizerArray:
 	cosine_dict = dict()
-	counter += 1
-	if counter in counter_steps:
-		print(counter)
 	for event_id, event_vector in zip(event_id_list, eventVectorizerArray):
 		cosine = cosine_x(tweet_vector, event_vector)
 		cosine_dict[event_id] = cosine
