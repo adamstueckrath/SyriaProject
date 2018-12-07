@@ -17,7 +17,18 @@ from concurrent.futures import as_completed, ThreadPoolExecutor
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 
+
 __version__ = '0.3.2'
+
+def string_to_datetime(t_date):
+    """
+    Turns a datetime string like this: 
+    '2017-07-06T18:34:37.000Z' 
+    to a Python datetime object like this -> 2017-07-06 18:34:41
+    """
+    
+    return pd.to_datetime(t_date).date()
+
 
 def read_csv_data(tweet_csv, event_csv):
     """
@@ -30,7 +41,7 @@ def read_csv_data(tweet_csv, event_csv):
     return tweets_df, events_df
 
 
-def remove_tweets_filter(tweets_df, filter_amount=None):
+def remove_tweets_filter(tweets_df, events_df, filter_amount=None):
     """
     Drops Nan values from the tweet_text_normalize column and 
     returns dataframe filtered or whole
@@ -39,7 +50,10 @@ def remove_tweets_filter(tweets_df, filter_amount=None):
     if filter_amount:
         tweets_df = tweets_df[:filter_amount]
 
-    return tweets_df
+    tweets_df['tweet_created_at'] = tweets_df['tweet_created_at'].apply(string_to_datetime)
+    events_df['event_date'] = events_df['event_date'].apply(string_to_datetime)
+
+    return tweets_df, events_df
 
 
 def eval_dataframe(tweets_df, events_df):
@@ -51,6 +65,16 @@ def eval_dataframe(tweets_df, events_df):
     events_df['event_text_normalize'] = events_df['event_text_normalize'].apply(eval)
 
     return tweets_df, events_df
+
+
+def date_ranginater(tweets_df, events_df):
+    tweet_dates = sorted(tweets_df.tweet_created_at.unique().tolist())
+    event_dates = sorted(events_df.event_date.unique().tolist())
+    my_dict = dict()
+    for index, e_date in enumerate(event_dates):
+        my_dict[e_date] = tweet_dates[index:index + 4]
+
+    return my_dict
 
 
 def create_corpus(tweets_df, events_df):
@@ -71,12 +95,12 @@ def create_corpus(tweets_df, events_df):
 def tfidf_algo(tweet_corpus, event_corpus, print_shape=False):
     """
     returns a two document term matrices of document (y) and featured words (x)
-    
+
     fit_transform(): Learn vocabulary and idf, return term-document matrix.
     transform(): Transform documents to document-term matrix. Uses the vocabulary and 
     document frequencies (df) learned by fit_transform()
     """
-    vectorizer = TfidfVectorizer(min_df=.00003, max_df=.95)
+    vectorizer = TfidfVectorizer(min_df=.00025)
     tweetVectorizerArray = vectorizer.fit_transform(tweet_corpus).toarray()
     eventVectorizerArray = vectorizer.transform(event_corpus).toarray()
     if print_shape:
@@ -128,24 +152,33 @@ def main():
 
     # process data
     tweets_df, events_df = read_csv_data(tweets_pre_processed_csv, events_pre_processed_csv)
-    tweets_df = remove_tweets_filter(tweets_df) 
+    tweets_df, events_df= remove_tweets_filter(tweets_df, events_df) 
     tweets_df, events_df = eval_dataframe(tweets_df, events_df)
-    tweet_corpus, event_corpus = create_corpus(tweets_df, events_df)
+    date_chucks = date_ranginater(tweets_df, events_df)    
+    for event_date, tweet_dates in date_chucks.items():
+        print(event_date, tweet_dates)
+        tweet_mask = (tweets_df['tweet_created_at'] >= tweet_dates[0]) & (tweets_df['tweet_created_at'] <= tweet_dates[-1])
+        event_mask = (events_df['event_date'] == event_date)
+        tweet_df = tweets_df.loc[tweet_mask]
+        event_df = events_df.loc[event_mask]
+        print(tweet_df.shape, event_df.shape)
+        tweet_corpus, event_corpus = create_corpus(tweet_df, event_df)
 
-    # begin algorithm
-    tweet_array, event_array = tfidf_algo(tweet_corpus, event_corpus, print_shape=True) 
-    event_id_list = events_df.event_id.tolist()
-    cosine_similarity_results = query_vectors_cosine(tweet_array, event_array, event_id_list)
+        # begin algorithm
+        tweet_array, event_array = tfidf_algo(tweet_corpus, event_corpus, print_shape=True) 
+        event_id_list = events_df.event_id.tolist()
+        cosine_similarity_results = query_vectors_cosine(tweet_array, event_array, event_id_list)
 
-    # assign results to tweets dataframe
-    tweets_df['tweet_event_cosine'] = cosine_similarity_results
-    write tweets to csv 
-    tweets_model_csv = syria_data_dir / 'model' / 'model_data' / 'tweet_modelv7.csv'
-    tweets_df.to_csv(tweets_model_csv, index=False)
+        # # assign results to tweets dataframe
+        # # tweets_df['tweet_event_cosine'] = cosine_similarity_results
+        print(cosine_similarity_results)
+#     write tweets to csv 
+#     tweets_model_csv = syria_data_dir / 'model' / 'model_data' / 'tweet_modelv7.csv'
+#     tweets_df.to_csv(tweets_model_csv, index=False)
     
-    end = time.time() # end timer
-    print('End time: {}'.format(end))
-    print('Total time: {}'.format(end-start))
+#     end = time.time() # end timer
+#     print('End time: {}'.format(end))
+#     print('Total time: {}'.format(end-start))
 
 if __name__ == '__main__':
     main()
