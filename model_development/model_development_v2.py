@@ -14,12 +14,15 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from functools import partial
 from concurrent.futures import as_completed, ThreadPoolExecutor
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfTransformer
 
 # start timer
 start = time.time()
 print('Start time: {}'.format(start))
 
-# set directory path data
+# set directory path data /Users/adamstueckrath/Desktop/syria_data/ 
+#/home/stueckrath.adam/syria_data/
 syria_data_dir = pathlib.Path('/home/stueckrath.adam/syria_data/')
 
 # syria_events_csv file path
@@ -34,9 +37,6 @@ events_df = pd.read_csv(events_pre_processed_csv, header=0)
 tweets_df = tweets_df.dropna(subset=['tweet_text_normalize'])
 
 tweets_df = tweets_df
-# if subset is used, replace every 'tweets_df' variable below with tweet_subset
-# tweet_subset = tweets_df.copy()
-# tweet_subset = tweet_subset[:100]
 
 # create list objects
 tweets_df['tweet_text_normalize'] = tweets_df['tweet_text_normalize'].apply(eval)
@@ -54,13 +54,6 @@ event_normalize_text = [ ' '.join(x) for x in event_normalize_text ]
 tweet_vec = tweet_normalize_text # tweets
 event_vec = event_normalize_text # event query
 
-vectorizer = TfidfVectorizer()
-tweetVectorizerArray = vectorizer.fit_transform(tweet_vec).toarray()
-eventVectorizerArray = vectorizer.transform(event_vec).toarray()
-
-print(tweetVectorizerArray.shape) 
-print(eventVectorizerArray.shape)
-
 tweet_id_list = tweets_df.tweet_id_str.tolist()
 event_id_list = events_df.event_id.tolist()
 
@@ -73,30 +66,11 @@ def cosine_x(a, b):
     """
     return round(np.dot(a, b)/(np.linalg.norm(a) * np.linalg.norm(b)), 3)
 
-# def query_x(tweet_id_vec):
-#     # for tweet_id, tweet_vector in tweet_id_vec:
-#     #     print(tweet_id, tweet_vector)
-#     tweet_vector = tweet_id_vec[1]
-#     cosine_dict = dict()
-#     for event_id, event_vector in zip(event_id_list, eventVectorizerArray):
-#     	cosine = cosine_x(tweet_vector, event_vector)
-#     	cosine_dict[event_id] = cosine
-#     max_event_id = max(cosine_dict, key=cosine_dict.get)
-#     return (tweet_id_vec[0], max_event_id, cosine_dict[max_event_id])
-
-# def multithreading(workers, func, args):
-#     """
-#     Multi-threading function to improve output
-#     """
-#     with ThreadPoolExecutor(workers) as ex:
-#         res = ex.map(func, args)
-#     return list(res)
-
-# tweet_id_vec = zip(tweet_id_list, tweetVectorizerArray)
-# event_id_vec = zip(event_id_list, eventVectorizerArray)
-
-# print('starting multithreading')
-# results = multithreading(50, query_x, tweet_id_vec)
+vectorizer = TfidfVectorizer(min_df=.000009, max_df=.95)
+tweetVectorizerArray = vectorizer.fit_transform(tweet_vec).toarray()
+eventVectorizerArray = vectorizer.transform(event_vec).toarray()
+print(tweetVectorizerArray.shape) 
+print(eventVectorizerArray.shape)
 
 tweet_event_ids = []
 counter_numbers = [ num for num in range(0, len(tweet_vec), 1000) ]
@@ -119,10 +93,10 @@ print('Total time: {}'.format(end-start))
 
 
 # assign event_ids to tweets
-tweets_df['tweet_event_id'] = results
+tweets_df['tweet_event_id'] = tweet_event_ids
 
 # tweets_no_rts_csv file path
-tweets_model_csv = syria_data_dir / 'model' / 'model_data' / 'tweet_modelv3.csv'
+tweets_model_csv = syria_data_dir / 'model' / 'model_data' / 'tweet_modelv6.csv'
 
 # write tweets to csv 
 tweets_df.to_csv(tweets_model_csv, index=False)
