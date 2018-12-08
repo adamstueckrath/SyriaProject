@@ -5,6 +5,7 @@ import pprint
 import pathlib
 import itertools
 import time
+import itertools
 
 # import third-party libraries
 import numpy as np
@@ -68,6 +69,15 @@ def eval_dataframe(tweets_df, events_df):
 
 
 def date_ranginater(tweets_df, events_df):
+    """
+    Returns a dictionary of date ranges where the key is the event date and
+    the value is the tweet dates.
+    Example: 
+    {datetime.date(2017, 7, 6): [datetime.date(2017, 7, 6),
+                                 datetime.date(2017, 7, 7),
+                                 datetime.date(2017, 7, 8),
+                                 datetime.date(2017, 7, 9)]}
+    """
     tweet_dates = sorted(tweets_df.tweet_created_at.unique().tolist())
     event_dates = sorted(events_df.event_date.unique().tolist())
     my_dict = dict()
@@ -100,7 +110,7 @@ def tfidf_algo(tweet_corpus, event_corpus, print_shape=False):
     transform(): Transform documents to document-term matrix. Uses the vocabulary and 
     document frequencies (df) learned by fit_transform()
     """
-    vectorizer = TfidfVectorizer(min_df=.00025)
+    vectorizer = TfidfVectorizer(min_df=.000025)
     tweetVectorizerArray = vectorizer.fit_transform(tweet_corpus).toarray()
     eventVectorizerArray = vectorizer.transform(event_corpus).toarray()
     if print_shape:
@@ -113,17 +123,17 @@ def cosine_x(a, b):
     Takes 2 vectors a, b and returns the cosine similarity 
     according to the definition of the dot product
     """
-    return round(np.dot(a, b)/(np.linalg.norm(a) * np.linalg.norm(b)), 3)
+    return round(np.inner(a, b)/(np.linalg.norm(a) * np.linalg.norm(b)), 3)
 
 
-def query_vectors_cosine(tweetVectorizerArray, eventVectorizerArray, event_id_list):
+def query_vectors_cosine(tweetVectorizerArray, eventVectorizerArray, tweet_id_list, event_id_list):
     """
     https://stackoverflow.com/questions/12118720/python-tf-idf-cosine-to-find-document-similarity
     """
     tweet_event_cosine = []
     counter_numbers = [ num for num in range(0, len(tweetVectorizerArray), 1000) ]
     counter = 0
-    for tweet_vector in tweetVectorizerArray:
+    for tweet_id, tweet_vector in zip(tweet_id_list, tweetVectorizerArray):
         cosine_dict = dict()
         counter += 1
         if counter in counter_numbers:
@@ -132,8 +142,9 @@ def query_vectors_cosine(tweetVectorizerArray, eventVectorizerArray, event_id_li
             cosine = cosine_x(tweet_vector, event_vector)
             cosine_dict[event_id] = cosine
 
-        maximum = max(cosine_dict, key=cosine_dict.get)
-        tweet_event_cosine.append((maximum, cosine_dict[maximum]))
+        event_id_max_cosine = max(cosine_dict, key=cosine_dict.get)
+        event_id_max_cosine_value = cosine_dict[maximum]
+        tweet_event_cosine.append((tweet_id, event_id_max_cosine, event_id_max_cosine_value))
 
     return tweet_event_cosine
 
@@ -154,7 +165,8 @@ def main():
     tweets_df, events_df = read_csv_data(tweets_pre_processed_csv, events_pre_processed_csv)
     tweets_df, events_df= remove_tweets_filter(tweets_df, events_df) 
     tweets_df, events_df = eval_dataframe(tweets_df, events_df)
-    date_chucks = date_ranginater(tweets_df, events_df)    
+    date_chucks = date_ranginater(tweets_df, events_df)
+    cosine_results = []
     for event_date, tweet_dates in date_chucks.items():
         print(event_date, tweet_dates)
         tweet_mask = (tweets_df['tweet_created_at'] >= tweet_dates[0]) & (tweets_df['tweet_created_at'] <= tweet_dates[-1])
@@ -164,21 +176,23 @@ def main():
         print(tweet_df.shape, event_df.shape)
         tweet_corpus, event_corpus = create_corpus(tweet_df, event_df)
 
-        # begin algorithm
+        # begin algorithm on date chunck
         tweet_array, event_array = tfidf_algo(tweet_corpus, event_corpus, print_shape=True) 
-        event_id_list = events_df.event_id.tolist()
-        cosine_similarity_results = query_vectors_cosine(tweet_array, event_array, event_id_list)
-
-        # # assign results to tweets dataframe
-        # # tweets_df['tweet_event_cosine'] = cosine_similarity_results
-        print(cosine_similarity_results)
-#     write tweets to csv 
-#     tweets_model_csv = syria_data_dir / 'model' / 'model_data' / 'tweet_modelv7.csv'
-#     tweets_df.to_csv(tweets_model_csv, index=False)
+        tweet_id_list  = tweet_df.tweet_id_str.tolist()
+        event_id_list = event_df.event_id.tolist()
+        cosine_query_results = query_vectors_cosine(tweet_array, event_array, tweet_id_list, event_id_list)
+        
+        # append results to cosine_results list
+        cosine_results.append(cosine_query_results)
+        
+    # write tweets to csv 
+    cosine_results_df = pd.DataFrame(data, columns=['tweet_id_str', 'event_id', 'consine_value'])
+    tweets_model_csv = syria_data_dir / 'model' / 'model_data' / 'tweet_modelv8.csv'
+    tweets_df.to_csv(tweets_model_csv, index=False)
     
-#     end = time.time() # end timer
-#     print('End time: {}'.format(end))
-#     print('Total time: {}'.format(end-start))
+    end = time.time() # end timer
+    print('End time: {}'.format(end))
+    print('Total time: {}'.format(end-start))
 
 if __name__ == '__main__':
     main()
