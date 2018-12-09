@@ -143,7 +143,7 @@ def query_vectors_cosine(tweetVectorizerArray, eventVectorizerArray, tweet_id_li
             cosine_dict[event_id] = cosine
 
         event_id_max_cosine = max(cosine_dict, key=cosine_dict.get)
-        event_id_max_cosine_value = cosine_dict[maximum]
+        event_id_max_cosine_value = cosine_dict[event_id_max_cosine]
         tweet_event_cosine.append((tweet_id, event_id_max_cosine, event_id_max_cosine_value))
 
     return tweet_event_cosine
@@ -167,6 +167,8 @@ def main():
     tweets_df, events_df = eval_dataframe(tweets_df, events_df)
     date_chucks = date_ranginater(tweets_df, events_df)
     cosine_results = []
+
+    # iterate over ranginater chuncks and filter data in dates
     for event_date, tweet_dates in date_chucks.items():
         print(event_date, tweet_dates)
         tweet_mask = (tweets_df['tweet_created_at'] >= tweet_dates[0]) & (tweets_df['tweet_created_at'] <= tweet_dates[-1])
@@ -176,7 +178,7 @@ def main():
         print(tweet_df.shape, event_df.shape)
         tweet_corpus, event_corpus = create_corpus(tweet_df, event_df)
 
-        # begin algorithm on date chunck
+        # begin algorithm for date chunck
         tweet_array, event_array = tfidf_algo(tweet_corpus, event_corpus, print_shape=True) 
         tweet_id_list  = tweet_df.tweet_id_str.tolist()
         event_id_list = event_df.event_id.tolist()
@@ -184,11 +186,12 @@ def main():
         
         # append results to cosine_results list
         cosine_results.append(cosine_query_results)
-        
+
     # write tweets to csv 
-    cosine_results_df = pd.DataFrame(data, columns=['tweet_id_str', 'event_id', 'consine_value'])
-    tweets_model_csv = syria_data_dir / 'model' / 'model_data' / 'tweet_modelv8.csv'
-    tweets_df.to_csv(tweets_model_csv, index=False)
+    cosine_results = list(itertools.chain.from_iterable(cosine_results))
+    cosine_results_df = pd.DataFrame(cosine_results, columns=['tweet_id_str', 'event_id', 'consine_value'])
+    cosine_results_csv = syria_data_dir / 'model' / 'model_data' / 'tweet_modelv8.csv'
+    cosine_results_df.to_csv(cosine_results_csv, index=False)
     
     end = time.time() # end timer
     print('End time: {}'.format(end))
