@@ -80,11 +80,11 @@ def date_ranginater(tweets_df, events_df):
     """
     tweet_dates = sorted(tweets_df.tweet_created_at.unique().tolist())
     event_dates = sorted(events_df.event_date.unique().tolist())
-    my_dict = dict()
+    date_ranges = dict()
     for index, e_date in enumerate(event_dates):
         my_dict[e_date] = tweet_dates[index:index + 4]
 
-    return my_dict
+    return date_ranges
 
 
 def create_corpus(tweets_df, events_df):
