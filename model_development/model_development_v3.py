@@ -5,7 +5,6 @@ import pprint
 import pathlib
 import itertools
 import time
-import itertools
 
 # import third-party libraries
 import numpy as np
@@ -13,10 +12,7 @@ import pandas as pd
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from functools import partial
-from concurrent.futures import as_completed, ThreadPoolExecutor
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.feature_extraction.text import TfidfTransformer
+
 
 
 __version__ = '0.3.2'
