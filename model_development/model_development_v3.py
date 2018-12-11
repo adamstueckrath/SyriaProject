@@ -110,7 +110,7 @@ def tfidf_algo(tweet_corpus, event_corpus, print_shape=False):
     transform(): Transform documents to document-term matrix. Uses the vocabulary and 
     document frequencies (df) learned by fit_transform()
     """
-    vectorizer = TfidfVectorizer(min_df=.000025)
+    vectorizer = TfidfVectorizer(min_df=.000025, max_features=10000)
     tweetVectorizerArray = vectorizer.fit_transform(tweet_corpus).toarray()
     eventVectorizerArray = vectorizer.transform(event_corpus).toarray()
     if print_shape:
@@ -148,7 +148,6 @@ def query_vectors_cosine(tweetVectorizerArray, eventVectorizerArray, tweet_id_li
 
     return tweet_event_cosine
 
-
 def main():
     """
     Main control function
@@ -168,30 +167,51 @@ def main():
     date_chucks = date_ranginater(tweets_df, events_df)
     cosine_results = []
 
-    # iterate over ranginater chuncks and filter data in dates
+    # iterate over ranginater date chuncks and filter data 
     for event_date, tweet_dates in date_chucks.items():
         print(event_date, tweet_dates)
+   
         tweet_mask = (tweets_df['tweet_created_at'] >= tweet_dates[0]) & (tweets_df['tweet_created_at'] <= tweet_dates[-1])
         event_mask = (events_df['event_date'] == event_date)
-        tweet_df = tweets_df.loc[tweet_mask]
-        event_df = events_df.loc[event_mask]
-        print(tweet_df.shape, event_df.shape)
-        tweet_corpus, event_corpus = create_corpus(tweet_df, event_df)
+        tweets_df_filtered = tweets_df.loc[tweet_mask]
+        events_df_filtered = events_df.loc[event_mask]
+        print(tweets_df_filtered.shape, events_df_filtered.shape)
+        tweets_filtered_corpus, events_filtered_corpus = create_corpus(tweets_df_filtered, events_df_filtered)
 
-        # begin algorithm for date chunck
-        tweet_array, event_array = tfidf_algo(tweet_corpus, event_corpus, print_shape=True) 
-        tweet_id_list  = tweet_df.tweet_id_str.tolist()
-        event_id_list = event_df.event_id.tolist()
-        cosine_query_results = query_vectors_cosine(tweet_array, event_array, tweet_id_list, event_id_list)
-        
-        # append results to cosine_results list
+        # begin algorithm for date range chunck
+        tweets_array, events_array = tfidf_algo(tweets_filtered_corpus, events_filtered_corpus, print_shape=True) 
+
+        # append begin query for every tweet to events and find cosine_results list
+        tweets_filtered_id_list  = tweets_df_filtered.tweet_id.tolist()
+        events_filtered_id_list = events_df_filtered.event_id.tolist()
+        cosine_query_results = query_vectors_cosine(tweets_array, events_array, tweets_filtered_id_list, events_filtered_id_list)
         cosine_results.append(cosine_query_results)
 
-    # write tweets to csv 
+    # create new dataframe with results from original dataframes
     cosine_results = list(itertools.chain.from_iterable(cosine_results))
-    cosine_results_df = pd.DataFrame(cosine_results, columns=['tweet_id_str', 'event_id', 'consine_value'])
-    cosine_results_csv = syria_data_dir / 'model' / 'model_data' / 'tweet_modelv8.csv'
-    cosine_results_df.to_csv(cosine_results_csv, index=False)
+    cosine_results_df = pd.DataFrame(cosine_results, columns=['tweet_id', 'event_id', 'cosine_value'])
+    print(cosine_results_df.shape)
+
+    print('creating final csv')
+    # for overlapping results (because of date ranges) take the largest cosine per tweet_id
+    cosine_results_df = cosine_results_df.sort_values('cosine_value', ascending=False).drop_duplicates('tweet_id').sort_index()
+    
+    tweets_df_subset = tweets_df.drop(['tweet_id_str','tweet_lang', 'user_id_str', 
+                                       'user_name', 'tweet_text_clean', 'tweet_text_tokenize'], axis=1)
+
+    events_df_subset = events_df.drop(['event_type', 'actor_1', 'assoc_actor_1', 
+                                       'actor_2', 'assoc_actor_2', 'latitude', 
+                                       'longitude', 'event_text_clean', 'event_text_tokenize'], axis=1 )
+
+    tweets_df_subset = tweets_df_subset.set_index('tweet_id')
+    cosine_results_df_tweet_idx = cosine_results_df.set_index('tweet_id')
+    results_df = tweets_df_subset.join(cosine_results_df_tweet_idx)
+    results_df = results_df.reset_index()
+    results_df = pd.merge(results_df, events_df_subset, on='event_id', how='left')
+
+    # write tweets to csv 
+    results_csv = syria_data_dir / 'model' / 'model_data' / 'tweet_modelv12.csv'
+    results_df.to_csv(results_csv, index=False)
     
     end = time.time() # end timer
     print('End time: {}'.format(end))
@@ -199,4 +219,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
